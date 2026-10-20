@@ -1,5 +1,5 @@
 {
-  "name": "redmine-mcp",
+  "name": "@devyhan/redmine-mcp",
   "version": "0.1.0",
   "description": "MCP server connecting Redmine (issues, projects, users, time tracking, wiki, files) to AI assistants via the Redmine REST API",
   "license": "MIT",
@@ -27,6 +27,7 @@
     "dev": "tsc -p tsconfig.json --watch",
     "pretest": "npm run build",
     "test": "node scripts/run-tests.mjs",
+    "prepare": "npm run build",
     "prepack": "npm run clean && npm run build",
     "prepublishOnly": "npm run typecheck && npm test",
     "contract": "npm run build && node scripts/redmine-contract.mjs"

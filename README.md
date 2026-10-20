@@ -12,13 +12,19 @@ Pre-6.1 servers use an API-key binding instead.
 ## Install
 
 ```bash
-npm install -g redmine-mcp
+npm install -g @devyhan/redmine-mcp
 ```
 
 Or run without installing:
 
 ```bash
-npx redmine-mcp --redmine-url https://redmine.example.com
+npx -y @devyhan/redmine-mcp --redmine-url https://redmine.example.com
+```
+
+Before the first npm publish, the same works straight from GitHub:
+
+```bash
+npx -y github:devyhan/redmine-mcp --redmine-url https://redmine.example.com
 ```
 
 Node >= 20 required.

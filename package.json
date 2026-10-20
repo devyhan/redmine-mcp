@@ -1,0 +1,63 @@
+{
+  "name": "redmine-mcp",
+  "version": "0.1.0",
+  "description": "MCP server connecting Redmine (issues, projects, users, time tracking, wiki, files) to AI assistants via the Redmine REST API",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "redmine-mcp": "dist/index.js"
+  },
+  "main": "dist/index.js",
+  "files": [
+    "dist",
+    "!dist/**/*.test.js",
+    "!dist/**/*.test.d.ts",
+    "!dist/**/*.test.js.map",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "node dist/index.js",
+    "dev": "tsc -p tsconfig.json --watch",
+    "pretest": "npm run build",
+    "test": "node scripts/run-tests.mjs",
+    "prepack": "npm run clean && npm run build",
+    "prepublishOnly": "npm run typecheck && npm test",
+    "contract": "npm run build && node scripts/redmine-contract.mjs"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "redmine",
+    "issue-tracking",
+    "project-management",
+    "time-tracking"
+  ],
+  "dependencies": {
+    "@modelcontextprotocol/server": "^2.0.0",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.43",
+    "typescript": "^5.9.3"
+  },
+  "author": "devyhan",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/devyhan/redmine-mcp.git"
+  },
+  "homepage": "https://github.com/devyhan/redmine-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/devyhan/redmine-mcp/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

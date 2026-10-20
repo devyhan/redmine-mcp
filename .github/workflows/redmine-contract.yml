@@ -1,0 +1,24 @@
+name: Redmine contract
+
+# Weekly live drift check: probes a real Redmine for the scopes and paths this
+# server depends on. Needs repository secrets REDMINE_URL plus either
+# REDMINE_API_KEY or OAuth credentials; skipped silently without them.
+on:
+  schedule:
+    - cron: '17 3 * * 1'
+  workflow_dispatch:
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run contract
+        env:
+          REDMINE_MCP_URL: ${{ secrets.REDMINE_URL }}
+          REDMINE_MCP_API_KEY: ${{ secrets.REDMINE_API_KEY }}

@@ -13,7 +13,6 @@ import type {
   ServerConfig,
   ToolDefinition,
   ToolDeps,
-  ToolModule,
 } from './contracts.js';
 import { RedmineError, InteractionRequiredError } from './contracts.js';
 import { isNetworkFailure, networkFailureMessage } from './auth/provider.js';
@@ -22,33 +21,12 @@ import { packageVersion } from './config.js';
 import { GROUP_NAMES } from './tools/groups.js';
 import { buildDiscoveryTools } from './tools/discovery.js';
 import { genericModule } from './tools/generic.js';
-import { adminModule } from './tools/admin.js';
-import { filesModule } from './tools/files.js';
-import { issuesModule } from './tools/issues.js';
-import { projectsModule } from './tools/projects.js';
-import { queriesModule } from './tools/queries.js';
-import { searchModule } from './tools/search.js';
-import { timeModule } from './tools/time.js';
-import { usersModule } from './tools/users.js';
-import { wikiModule } from './tools/wiki.js';
+import { DOMAIN_MODULES } from './tools/modules.js';
 import { logger } from './util/logger.js';
 import { serializeResult } from './util/truncate.js';
 
 /** The server name reported in `initialize`. Clients key their config off it. */
 export const SERVER_NAME = 'redmine-mcp';
-
-/** Every domain module, keyed by the group name it owns. */
-const MODULES: Record<string, ToolModule> = {
-  issues: issuesModule,
-  projects: projectsModule,
-  users: usersModule,
-  time: timeModule,
-  wiki: wikiModule,
-  files: filesModule,
-  search: searchModule,
-  queries: queriesModule,
-  admin: adminModule,
-};
 
 /**
  * Tools always exposed in discovery mode alongside the discovery pair.
@@ -143,7 +121,7 @@ export function collectTools(deps: ToolDeps): ToolDefinition[] {
 
   for (const name of GROUP_NAMES) {
     if (!enabled.has(name)) continue;
-    const module = MODULES[name];
+    const module = DOMAIN_MODULES[name];
     if (module === undefined) {
       logger.warn('No tool module implements this group; skipping.', { group: name });
       continue;
@@ -163,7 +141,10 @@ export function exposedTools(
   tools: readonly ToolDefinition[],
   config: ServerConfig,
 ): ToolDefinition[] {
-  const available = config.readOnly ? tools.filter((tool) => tool.write !== true) : [...tools];
+  const available = tools.filter(
+    (tool) =>
+      (config.readOnly ? tool.write !== true : true) && (config.orgMode ? true : tool.requiresAdmin !== true),
+  );
 
   // Discovery gets the unfiltered catalogue on purpose: it applies --read-only
   // itself, and knowing a suppressed tool exists is how `call_tool` can explain

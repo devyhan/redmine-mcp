@@ -24,8 +24,10 @@ under `--read-only`.
 ## users — view_users
 
 - `users_get_current` — live identity (also carries the session attribution line).
-- `users_get` (id or `current`), `users_list` (name/status filter),
-  `users_update_current` (W, own firstname/lastname/mail).
+- `users_my_access` — admin flag, groups, and visible projects with roles. Call before
+  querying outside your projects; the answer to most 403s.
+- `users_get` (id or `current`), `users_list` (name/status filter, **admin-only**,
+  hidden without `--org-mode`), `users_update_current` (W, own firstname/lastname/mail).
 
 ## time — view_time_entries (+ log/edit)
 

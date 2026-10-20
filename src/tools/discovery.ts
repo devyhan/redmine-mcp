@@ -42,6 +42,7 @@ export function buildDiscoveryTools(catalogue: ToolDefinition[], config: ServerC
         const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
         const matches = catalogue.filter((tool) => {
           if (config.readOnly && tool.write === true) return false;
+          if (!config.orgMode && tool.requiresAdmin === true) return false;
           const haystack = `${tool.name} ${tool.title} ${tool.description}`.toLowerCase();
           return terms.every((term) => haystack.includes(term));
         });
@@ -56,7 +57,7 @@ export function buildDiscoveryTools(catalogue: ToolDefinition[], config: ServerC
       title: 'Call a discovered tool',
       description:
         'Invokes a tool named by discover_tools with the given arguments object. ' +
-        'Refuses unknown names and, under --read-only, write tools.',
+        'Refuses unknown names, write tools under --read-only, and admin tools without --org-mode.',
       inputSchema: callInput,
       write: true,
       scopes: [],
@@ -67,6 +68,12 @@ export function buildDiscoveryTools(catalogue: ToolDefinition[], config: ServerC
         if (!target) throw new Error(`Unknown tool: ${name}. Call discover_tools to see what exists.`);
         if (config.readOnly && target.write === true) {
           throw new Error(`${name} is a write tool and this server runs --read-only. It exists but will not run.`);
+        }
+        if (!config.orgMode && target.requiresAdmin === true) {
+          throw new Error(
+            `${name} needs a Redmine administrator and this server runs without --org-mode. ` +
+              'It exists but will not run.',
+          );
         }
         return target.handler(toolArgs);
       },

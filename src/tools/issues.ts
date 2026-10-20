@@ -5,6 +5,7 @@
 import { z } from 'zod';
 
 import type { ToolDefinition, ToolDeps, ToolModule } from '../contracts.js';
+import { RedmineError } from '../contracts.js';
 import { GROUPS } from './groups.js';
 
 const GROUP = GROUPS['issues']!;
@@ -157,18 +158,36 @@ export const issuesModule: ToolModule = {
       {
         name: 'issues_get',
         title: 'Get an issue',
-        description: 'Returns one issue by id, with optional associated data via include.',
+        description:
+          'Returns one issue by id, with optional associated data via include. ' +
+          'A 403 means the issue sits in a project you cannot see or is private to someone else — ' +
+          'call users_my_access to list what is visible instead of retrying the id.',
         inputSchema: getInput,
         scopes: READ_SCOPES,
         group: GROUP.name,
         handler: async (args) => {
           const { id, include } = getInput.parse(args);
-          const res = await redmine.request<{ issue: unknown }>({
-            path: `/issues/${id}.json`,
-            query: { include: include?.join(',') },
-            scopes: READ_SCOPES,
-          });
-          return res.data.issue;
+          try {
+            const res = await redmine.request<{ issue: unknown }>({
+              path: `/issues/${id}.json`,
+              query: { include: include?.join(',') },
+              scopes: READ_SCOPES,
+            });
+            return res.data.issue;
+          } catch (error) {
+            if (error instanceof RedmineError && error.status === 403) {
+              throw new RedmineError({
+                message: error.message,
+                status: error.status,
+                path: error.path,
+                hint:
+                  'Issue visibility is per-object: this issue is in a project outside your membership ' +
+                  'or marked private. Retrying the id cannot help — call users_my_access to see which ' +
+                  'projects and roles your account reaches, then query within those.',
+              });
+            }
+            throw error;
+          }
         },
       },
       {

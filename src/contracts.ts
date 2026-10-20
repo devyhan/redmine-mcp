@@ -266,6 +266,12 @@ export interface ToolDefinition {
   /** True when the tool mutates data. Suppressed under `--read-only`. */
   write?: boolean;
   /**
+   * True when the tool needs Redmine administrator rights even though its
+   * group does not (e.g. listing all users). Suppressed unless `--org-mode`
+   * is set, like admin-group tools.
+   */
+  requiresAdmin?: boolean;
+  /**
    * Opt-in identity attribution: when true, the registration layer prepends a
    * one-line rendering of the login-time cached identity to this tool's
    * serialized output. Defaults to off; an absent snapshot means no line,

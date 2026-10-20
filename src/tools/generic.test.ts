@@ -95,4 +95,16 @@ describe('generic tools', () => {
     await assert.rejects(raw.handler({ path: '/issues.json', method: 'DELETE' }), /--allow-generic-write/);
     await assert.rejects(raw.handler({ path: '/oauth/token', method: 'GET' }), /OAuth/);
   });
+
+  it('redmine_list_permissions names per-tool admin flags', async () => {
+    const { tools } = build();
+    const list = tools.find((tool) => tool.name === 'redmine_list_permissions')!;
+    const result = (await list.handler({})) as {
+      groups: { name: string; adminOnlyTools: string[] }[];
+    };
+    const users = result.groups.find((group) => group.name === 'users')!;
+    assert.deepEqual(users.adminOnlyTools, ['users_list']);
+    const issues = result.groups.find((group) => group.name === 'issues')!;
+    assert.deepEqual(issues.adminOnlyTools, []);
+  });
 });

@@ -3,6 +3,16 @@
 All notable changes to this project are documented here. Versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] — 2026-10-20
+
+- Permission-aware catalogue: per-tool `requiresAdmin` gating (`users_list`
+  is admin-only and hidden without `--org-mode`), named in
+  `redmine_list_permissions` and the `permissions` command.
+- New `users_my_access` tool: admin flag, groups, and visible projects with
+  roles, so agents scope queries before anything 403s.
+- `issues_get` 403s now explain per-object visibility and point at
+  `users_my_access` instead of inviting a retry.
+
 ## [0.2.0] — 2026-10-20
 
 - First-class API-key fallback: `--api-key` / `REDMINE_MCP_API_KEY` works as

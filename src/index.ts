@@ -176,6 +176,22 @@ async function runStatus(config: ServerConfig, clientIdSource: ClientIdSource): 
 
 function runPermissions(config: ServerConfig): void {
   const lines: string[] = [`Tool groups for ${redmineBaseUrl(config)}:`];
+  // Catalogue built with doubles that refuse to talk: permissions only reads
+  // metadata, so per-tool admin flags come along for free.
+  const probe = collectTools({
+    redmine: inertRedmineClient(),
+    config,
+    auth: scopeReadingOnlyAuth(),
+    consentScopes: () => [],
+  });
+  const adminOnlyByGroup = new Map<string, string[]>();
+  for (const tool of probe) {
+    if (tool.requiresAdmin === true) {
+      const list = adminOnlyByGroup.get(tool.group) ?? [];
+      list.push(tool.name);
+      adminOnlyByGroup.set(tool.group, list);
+    }
+  }
   for (const name of GROUP_NAMES) {
     const group = GROUPS[name]!;
     const enabled = config.groups.includes(name) ? 'enabled' : 'off';
@@ -183,7 +199,10 @@ function runPermissions(config: ServerConfig): void {
       ...group.readScopes.map((scope) => scope),
       ...(config.readOnly ? [] : group.writeScopes.map((scope) => `${scope} (write)`)),
     ].join(', ');
-    lines.push(`  ${name} [${enabled}]${group.requiresAdmin ? ' (needs admin)' : ''}: ${needs || '(no scopes)'}`);
+    const adminOnly = adminOnlyByGroup.get(name) ?? [];
+    const adminNote =
+      adminOnly.length > 0 && !group.requiresAdmin ? ` (admin-only tools: ${adminOnly.join(', ')})` : '';
+    lines.push(`  ${name} [${enabled}]${group.requiresAdmin ? ' (needs admin)' : ''}: ${needs || '(no scopes)'}${adminNote}`);
   }
   lines.push(`Group scopes in this config: ${scopesForGroups(config).join(' ') || '(none)'}`);
   out(`${lines.join('\n')}\n`);

@@ -6,6 +6,7 @@ import { adminModule } from './admin.js';
 import { filesModule } from './files.js';
 import { issuesModule } from './issues.js';
 import { projectsModule } from './projects.js';
+import { usersModule } from './users.js';
 
 function build(module: { build: (deps: never) => { name: string; handler: (args: never) => Promise<unknown> }[] }, paths: Record<string, { data: unknown; totalCount?: number }>) {
   const config = testConfig({ groups: ['issues'] });
@@ -67,5 +68,31 @@ describe('extended coverage tools', () => {
     assert.deepEqual(seen[0]!.body, { version: { status: 'closed' } });
     const remove = tools.find((tool) => tool.name === 'admin_delete_version')!;
     assert.deepEqual(await remove.handler({ id: 9 } as never), { deleted: 9 });
+  });
+
+  it('reports my access with projects and roles', async () => {
+    const { tools, seen } = build(usersModule, {
+      '/users/current.json': {
+        data: {
+          user: {
+            id: 7,
+            login: 'jdoe',
+            admin: false,
+            groups: [{ id: 3, name: 'devs' }],
+            memberships: [
+              { id: 1, project: { id: 10, name: 'demo' }, roles: [{ id: 4, name: 'Developer' }] },
+            ],
+          },
+        },
+      },
+    });
+    const access = tools.find((tool) => tool.name === 'users_my_access')!;
+    assert.deepEqual(await access.handler({} as never), {
+      login: 'jdoe',
+      admin: false,
+      groups: [{ id: 3, name: 'devs' }],
+      projects: [{ id: 10, name: 'demo', roles: ['Developer'] }],
+    });
+    assert.equal(seen[0]!.query?.['include'], 'memberships,groups');
   });
 });

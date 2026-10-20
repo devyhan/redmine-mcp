@@ -14,6 +14,7 @@ import { InteractionRequiredError } from '../contracts.js';
 import { credentialSource } from '../auth/index.js';
 import type { CredentialSource } from '../auth/index.js';
 import { GROUPS, GROUP_NAMES } from './groups.js';
+import { DOMAIN_MODULES } from './modules.js';
 
 export const GENERIC_GROUP: ToolGroupMeta = {
   name: 'generic',
@@ -84,7 +85,8 @@ const redmineRequestInput = z.object({
 
 export const genericModule: ToolModule = {
   group: GENERIC_GROUP,
-  build({ redmine, config, auth, consentScopes }: ToolDeps): ToolDefinition[] {
+  build(deps: ToolDeps): ToolDefinition[] {
+    const { redmine, config, auth, consentScopes } = deps;
     const tools: ToolDefinition[] = [
       {
         name: 'auth_begin_login',
@@ -191,6 +193,16 @@ export const genericModule: ToolModule = {
           droppedGroups: config.droppedGroups ?? [],
           groups: GROUP_NAMES.map((name) => {
             const group = GROUPS[name]!;
+            // Per-tool admin flags (e.g. users_list inside an otherwise open
+            // group) are enumerated here so a 403 never comes as a surprise.
+            const module = DOMAIN_MODULES[name];
+            const adminOnlyTools =
+              module === undefined
+                ? []
+                : module
+                    .build(deps)
+                    .filter((tool) => tool.requiresAdmin === true)
+                    .map((tool) => tool.name);
             return {
               name: group.name,
               title: group.title,
@@ -198,6 +210,7 @@ export const genericModule: ToolModule = {
               readScopes: group.readScopes,
               writeScopes: group.writeScopes,
               requiresAdmin: group.requiresAdmin,
+              adminOnlyTools,
               enabled: config.groups.includes(name),
             };
           }),

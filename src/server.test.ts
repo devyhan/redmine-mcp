@@ -50,6 +50,14 @@ describe('server assembly', () => {
     assert.ok(!names.includes('redmine_request'));
   });
 
+  it('suppresses admin-only tools without --org-mode', () => {
+    const names = catalogueNames(['users']);
+    assert.ok(names.includes('users_my_access'));
+    assert.ok(!names.includes('users_list'));
+    const org = catalogueNames(['users'], { orgMode: true });
+    assert.ok(org.includes('users_list'));
+  });
+
   it('collapses to the discovery pair plus session tools under --discovery', () => {
     const names = catalogueNames(['issues', 'projects'], { discovery: true });
     assert.deepEqual(names, [

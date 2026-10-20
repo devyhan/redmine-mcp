@@ -2,8 +2,10 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { stubAuth, stubRedmine, testConfig } from '../test-support.js';
+import { RedmineError } from '../contracts.js';
 import { GROUPS } from './groups.js';
 import { issuesModule } from './issues.js';
+import { usersModule } from './users.js';
 import { buildDiscoveryTools } from './discovery.js';
 
 describe('issues tools', () => {
@@ -39,6 +41,24 @@ describe('issues tools', () => {
   it('belongs to the issues group catalogue', () => {
     assert.equal(issuesModule.group, GROUPS['issues']);
   });
+
+  it('explains 403 on get as per-object visibility, not a malformed call', async () => {
+    const config = testConfig({ groups: ['issues'] });
+    const { client } = stubRedmine({
+      '/issues/1.json': () => {
+        throw new RedmineError({ message: 'Forbidden', status: 403, path: '/issues/1.json' });
+      },
+    });
+    const tools = issuesModule.build({ redmine: client, config, auth: stubAuth(), consentScopes: () => [] });
+    const get = tools.find((tool) => tool.name === 'issues_get')!;
+    await assert.rejects(get.handler({ id: 1 }), (error: unknown) => {
+      assert.ok(error instanceof RedmineError);
+      assert.equal(error.status, 403);
+      assert.match(error.hint ?? '', /users_my_access/);
+      assert.match(error.hint ?? '', /Retrying the id cannot help/);
+      return true;
+    });
+  });
 });
 
 describe('discovery tools', () => {
@@ -60,5 +80,15 @@ describe('discovery tools', () => {
     const [, call] = buildDiscoveryTools(catalogue, config);
     await assert.rejects(call!.handler({ name: 'issues_delete', arguments: { id: 1 } }), /--read-only/);
     await assert.rejects(call!.handler({ name: 'nope', arguments: {} }), /Unknown tool/);
+  });
+
+  it('refuses admin-only tools without --org-mode instead of calling them', async () => {
+    const config = testConfig({ groups: ['users'] });
+    const { client } = stubRedmine({});
+    const catalogue = usersModule.build({ redmine: client, config, auth: stubAuth(), consentScopes: () => [] });
+    const [discover, call] = buildDiscoveryTools(catalogue, config);
+    const found = (await discover!.handler({ query: 'list users' })) as { matches: { name: string }[] };
+    assert.ok(!found.matches.some((match) => match.name === 'users_list'));
+    await assert.rejects(call!.handler({ name: 'users_list', arguments: {} }), /--org-mode/);
   });
 });

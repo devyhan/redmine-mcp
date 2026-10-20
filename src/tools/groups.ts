@@ -146,6 +146,7 @@ export function consentScopesFor(config: ServerConfig, tools: readonly ToolDefin
   const out = new Set<string>(scopesForGroups(config));
   for (const tool of tools) {
     if (config.readOnly && tool.write === true) continue;
+    if (!config.orgMode && tool.requiresAdmin === true) continue;
     for (const scope of tool.scopes) out.add(scope);
   }
   return [...out].sort();

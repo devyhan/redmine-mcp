@@ -71,9 +71,12 @@ export const usersModule: ToolModule = {
       {
         name: 'users_list',
         title: 'List users',
-        description: 'Lists users, optionally filtered by name substring. Needs view-user rights.',
+        description:
+          'Lists users, optionally filtered by name substring. Needs a Redmine administrator: ' +
+          'the Users controller refuses the index to everyone else, so this tool is hidden unless --org-mode is set.',
         inputSchema: listInput,
         scopes: READ_SCOPES,
+        requiresAdmin: true,
         group: GROUP.name,
         handler: async (args) => {
           const parsed = listInput.parse(args);
@@ -102,6 +105,48 @@ export const usersModule: ToolModule = {
             scopes: READ_SCOPES,
           });
           return { updated: 'current' };
+        },
+      },
+      {
+        name: 'users_my_access',
+        title: 'Show my access',
+        description:
+          'Answers "what can I see" before anything 403s: admin flag, group memberships, ' +
+          'and every visible project with its roles. Check this before querying issues or ' +
+          'users outside your projects — a 403 almost always means the object lives where ' +
+          'this list does not reach, not that the call was malformed.',
+        inputSchema: z.object({}),
+        scopes: READ_SCOPES,
+        group: GROUP.name,
+        handler: async () => {
+          const res = await redmine.request<{
+            user: {
+              id: number;
+              login: string;
+              admin?: boolean;
+              groups?: { id: number; name: string }[];
+              memberships?: {
+                id: number;
+                project: { id: number; name: string };
+                roles: { id: number; name: string }[];
+              }[];
+            };
+          }>({
+            path: '/users/current.json',
+            query: { include: 'memberships,groups' },
+            scopes: READ_SCOPES,
+          });
+          const user = res.data.user;
+          return {
+            login: user.login,
+            admin: user.admin ?? false,
+            groups: (user.groups ?? []).map((group) => ({ id: group.id, name: group.name })),
+            projects: (user.memberships ?? []).map((membership) => ({
+              id: membership.project.id,
+              name: membership.project.name,
+              roles: membership.roles.map((role) => role.name),
+            })),
+          };
         },
       },
     ];

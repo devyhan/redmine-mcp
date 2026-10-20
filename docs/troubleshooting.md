@@ -38,6 +38,14 @@ Usually permissions, not bugs: the credential's account cannot see the
 objects. Confirm with `users_get_current`, then check project membership and
 role permissions in Redmine.
 
+## 403 on an issue or user id
+
+Visibility is per-object: the issue is in a project outside your membership
+or marked private, and `users_list` is admin-only (hidden without
+`--org-mode`). Call `users_my_access` first — it lists your admin flag,
+groups, and every visible project with roles — then query within that scope
+instead of retrying the id.
+
 ## `stdout` corruption / client shows framing errors
 
 Something wrote to stdout under `serve`. The server logs to stderr only; check

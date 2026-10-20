@@ -15,6 +15,7 @@ import {
   cachePaths,
   clearCache,
   createAuthProviderFromConfig,
+  credentialSource,
   describeAccount,
   scopeReadingOnlyAuth,
 } from './auth/index.js';
@@ -22,6 +23,7 @@ import type { ClientIdSource, ParsedConfig } from './config.js';
 import {
   ConfigError,
   clientIdGuidance,
+  isApiKeyUnset,
   isClientIdUnset,
   packageName,
   packageVersion,
@@ -119,6 +121,13 @@ async function runLogin(
     out(`Signed in as ${describeAccount(account)} (API key).\n`);
     return;
   }
+  if (!isApiKeyUnset(config.apiKey)) {
+    // Scopes are meaningless for a key (it carries the owner's permissions),
+    // so login verifies the key and caches the identity, nothing more.
+    const account = await auth.login([]);
+    out(`API key verified as ${describeAccount(account)} (no sign-in needed; the key is used directly).\n`);
+    return;
+  }
   if (isClientIdUnset(config.clientId)) {
     err(`No OAuth application is configured. ${clientIdGuidance()}\n`);
     process.exitCode = 1;
@@ -135,6 +144,9 @@ async function runLogout(config: ServerConfig, clientIdSource: ClientIdSource): 
   await auth.logout();
   await clearCache(config.cacheDir);
   out('Signed out. Cached session cleared.\n');
+  if (!isApiKeyUnset(config.apiKey)) {
+    out('Note: REDMINE_MCP_API_KEY/--api-key is still configured, so tools keep working with it.\n');
+  }
 }
 
 async function runStatus(config: ServerConfig, clientIdSource: ClientIdSource): Promise<void> {
@@ -142,6 +154,7 @@ async function runStatus(config: ServerConfig, clientIdSource: ClientIdSource): 
   const lines: string[] = [`${packageName()} ${packageVersion()}`, `Redmine: ${redmineBaseUrl(config)}`];
   const account = await auth.getAccount().catch(() => null);
   lines.push(account ? `Account: ${describeAccount(account)}` : 'Account: not signed in');
+  lines.push(`Credential: ${await credentialSource(config).catch(() => 'none')}`);
   if (auth.sessionHealth) {
     const health = await auth.sessionHealth();
     lines.push(`Session: ${health.credentialUsable ? 'usable' : 'not usable'}${health.note ? ` (${health.note})` : ''}`);

@@ -21,7 +21,7 @@ Or run without installing:
 npx -y @devyhan/redmine-mcp --redmine-url https://redmine.example.com
 ```
 
-Before the first npm publish, the same works straight from GitHub:
+Straight from GitHub (tracks the default branch instead of a release):
 
 ```bash
 npx -y github:devyhan/redmine-mcp --redmine-url https://redmine.example.com
@@ -39,7 +39,8 @@ Node >= 20 required.
    redmine-mcp --redmine-url https://redmine.example.com \
      --client-id <ID> --client-secret <SECRET> login
    ```
-   Pre-6.1 servers: `redmine-mcp --redmine-url … login --api-key <KEY>`.
+   Pre-6.1 servers (or no browser): set `REDMINE_MCP_API_KEY` and skip login
+   entirely, or `redmine-mcp --redmine-url … login --api-key <KEY>` once.
 3. Add to your MCP client:
    ```json
    {

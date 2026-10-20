@@ -30,13 +30,22 @@ API), OAuth2 Applications visible to an admin.
 
 ## API-key binding (any Redmine with REST enabled)
 
-```bash
-redmine-mcp --redmine-url https://redmine.example.com login --api-key <KEY>
-```
+Three ways, in precedence order (explicit configuration wins over cache):
 
-The key is verified once against `GET /users/current.json` and stored
-encrypted like a token. Find it on your account page (`/my/account`). Use
-this for pre-6.1 servers, EasyRedmine, or headless hosts.
+1. `--api-key KEY` flag — direct credential, zero login steps.
+2. `REDMINE_MCP_API_KEY` env — same, for MCP client JSON and containers.
+3. `redmine-mcp --redmine-url … login --api-key <KEY>` — verifies once against
+   `GET /users/current.json` and stores the binding encrypted like a token.
+
+Configured keys (1–2) are used directly and never written to disk; `login`
+with one configured only verifies it and caches the identity. `status` and
+`session_status` report which source supplies the credential (`env-key`,
+`stored-key`, `oauth`, `none`) — never the key itself.
+
+Find the key on your account page (`/my/account`). Use API keys for pre-6.1
+servers, EasyRedmine, headless hosts, or whenever the browser flow cannot run.
+The browser login probes for the OAuth provider first: against a server
+without one it fails fast with this fallback instead of opening a doomed tab.
 
 ## Flows
 

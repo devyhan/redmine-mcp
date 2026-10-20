@@ -67,4 +67,42 @@ describe('parseConfig', () => {
     const version = parseConfig(['--version']);
     assert.equal(version.command.kind, 'version');
   });
+
+  it('resolves the API key flag over env and reports its source', () => {
+    const previous = process.env['REDMINE_MCP_API_KEY'];
+    try {
+      delete process.env['REDMINE_MCP_API_KEY'];
+      const unset = parseConfig([...URL]);
+      assert.equal(unset.config.apiKey, '');
+      assert.equal(unset.apiKeySource.origin, 'unset');
+
+      process.env['REDMINE_MCP_API_KEY'] = 'env-key';
+      const fromEnv = parseConfig([...URL]);
+      assert.equal(fromEnv.config.apiKey, 'env-key');
+      assert.equal(fromEnv.apiKeySource.origin, 'env');
+
+      const fromFlag = parseConfig([...URL, '--api-key', 'flag-key']);
+      assert.equal(fromFlag.config.apiKey, 'flag-key');
+      assert.equal(fromFlag.apiKeySource.origin, 'flag');
+    } finally {
+      if (previous === undefined) delete process.env['REDMINE_MCP_API_KEY'];
+      else process.env['REDMINE_MCP_API_KEY'] = previous;
+    }
+  });
+
+  it('stores on login only an explicitly passed key, never the env key', () => {
+    const previous = process.env['REDMINE_MCP_API_KEY'];
+    try {
+      process.env['REDMINE_MCP_API_KEY'] = 'env-key';
+      // Env key configures the credential but must not be written to disk by login.
+      const login = parseConfig([...URL, 'login']);
+      assert.equal((login.command as { kind: string; apiKey?: string }).apiKey, undefined);
+      assert.equal(login.config.apiKey, 'env-key');
+      const explicit = parseConfig([...URL, 'login', '--api-key', 'flag-key']);
+      assert.equal((explicit.command as { kind: string; apiKey?: string }).apiKey, 'flag-key');
+    } finally {
+      if (previous === undefined) delete process.env['REDMINE_MCP_API_KEY'];
+      else process.env['REDMINE_MCP_API_KEY'] = previous;
+    }
+  });
 });

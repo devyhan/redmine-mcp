@@ -8,6 +8,7 @@ win. Unknown flags are hard errors.
 | `--redmine-url` | `REDMINE_MCP_URL` | (required) | Redmine base URL |
 | `--client-id` | `REDMINE_MCP_CLIENT_ID` | unset | OAuth2 application ID |
 | `--client-secret` | `REDMINE_MCP_CLIENT_SECRET` | unset | OAuth2 application secret |
+| `--api-key` | `REDMINE_MCP_API_KEY` | unset | API key: direct credential, no login needed |
 | `--groups` | — | personal preset | Enabled tool groups |
 | `--preset` | — | `personal` | `personal` or `all` |
 | `--read-only` | `REDMINE_MCP_READ_ONLY=1` | off | Suppress write tools |

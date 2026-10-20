@@ -11,6 +11,8 @@ import { z } from 'zod';
 
 import type { AuthProvider, ToolDefinition, ToolDeps, ToolModule, ToolGroupMeta } from '../contracts.js';
 import { InteractionRequiredError } from '../contracts.js';
+import { credentialSource } from '../auth/index.js';
+import type { CredentialSource } from '../auth/index.js';
 import { GROUPS, GROUP_NAMES } from './groups.js';
 
 export const GENERIC_GROUP: ToolGroupMeta = {
@@ -162,9 +164,11 @@ export const genericModule: ToolModule = {
               detail: error instanceof Error ? error.message : String(error),
             };
           }
+          const source = await credentialSource(config).catch((): CredentialSource => 'none');
           return {
             redmineUrl: config.redmineUrl,
             account: account ? { login: account.login, id: account.id, admin: account.admin ?? false } : null,
+            credential: source,
             session: health,
             reachable,
             groups: config.groups,

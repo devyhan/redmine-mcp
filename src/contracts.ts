@@ -334,6 +334,15 @@ export interface ServerConfig {
    * verifier. Empty while unset.
    */
   clientSecret: string;
+  /**
+   * API key from `--api-key` or `REDMINE_MCP_API_KEY`. Empty while unset.
+   *
+   * When set, tools use it directly with zero login steps: it wins over any
+   * stored OAuth session (explicit configuration beats cache). The value is
+   * never written to disk, never printed, and never returned by a tool — it
+   * only travels in the `X-Redmine-API-Key` request header.
+   */
+  apiKey: string;
   /** Names of the enabled tool groups. */
   groups: string[];
   /**

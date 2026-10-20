@@ -30,7 +30,7 @@ import type {
 } from '../contracts.js';
 import { InteractionRequiredError } from '../contracts.js';
 import type { ClientIdSource } from '../config.js';
-import { clientIdGuidance, isClientIdUnset } from '../config.js';
+import { apiKeySetupGuidance, clientIdGuidance, isApiKeyUnset, isClientIdUnset } from '../config.js';
 import { logger } from '../util/logger.js';
 import type { PreflightChecks } from './preflight.js';
 import { defaultPreflight } from './preflight.js';
@@ -200,6 +200,45 @@ export function createAuthProvider(deps: ProviderDeps): AuthProvider {
   const tokenUrl = `${config.redmineUrl}/oauth/token`;
   const authorizeUrl = `${config.redmineUrl}/oauth/authorize`;
 
+  /**
+   * Whether the server serves an OAuth provider. `GET /oauth/authorize` with
+   * bogus parameters answers 400/302/200 when the Doorkeeper routes exist and
+   * 404 when they don't (pre-6.1 or provider disabled). Network failures mean
+   * "unknown", never "absent": a wrong `false` here would talk the user out
+   * of a sign-in that would have worked. Cached per provider instance.
+   */
+  let oauthProbe: boolean | null | undefined;
+  async function hasOAuthProvider(): Promise<boolean | null> {
+    if (oauthProbe !== undefined) return oauthProbe;
+    const probe = new URL(authorizeUrl);
+    probe.searchParams.set('client_id', 'redmine-mcp-probe');
+    probe.searchParams.set('redirect_uri', 'http://127.0.0.1:1/callback');
+    probe.searchParams.set('response_type', 'code');
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
+    try {
+      const res = await fetchFn(probe, { method: 'GET', signal: controller.signal, redirect: 'manual' });
+      oauthProbe = res.status !== 404;
+    } catch {
+      oauthProbe = null;
+    } finally {
+      clearTimeout(timer);
+    }
+    return oauthProbe;
+  }
+
+  function noProviderError(scopes: readonly string[]): InteractionRequiredError {
+    return new InteractionRequiredError(
+      'This Redmine serves no OAuth provider (pre-6.1, or the provider is disabled), so the browser ' +
+        `sign-in cannot work here. ${apiKeySetupGuidance()}`,
+      [],
+      true,
+      false,
+      false,
+      scopes,
+    );
+  }
+
   async function postToken(body: Record<string, string>): Promise<TokenResponse> {
     let res: Response;
     try {
@@ -304,6 +343,15 @@ export function createAuthProvider(deps: ProviderDeps): AuthProvider {
   }
 
   async function loginByBrowser(scopes: string[]): Promise<AccountInfo> {
+    // Fail fast before touching a browser: against a provider-less server the
+    // authorize page would 404 after the user already switched windows.
+    const provider = await hasOAuthProvider();
+    if (provider === false) throw noProviderError(scopes);
+    if (provider === null) {
+      logger.warn('OAuth provider probe failed; attempting the browser flow anyway.', {
+        reason: 'reachability unknown',
+      });
+    }
     if (isClientIdUnset(config.clientId)) {
       throw new InteractionRequiredError(`No OAuth application is configured. ${clientIdGuidance()}`);
     }
@@ -389,9 +437,22 @@ export function createAuthProvider(deps: ProviderDeps): AuthProvider {
 
   return {
     async getCredential(scopes: string[]): Promise<{ scheme: 'bearer' | 'apiKey'; value: string }> {
+      // Explicit configuration wins over cache: a flag/env key works with
+      // zero login steps and is never written to disk.
+      if (!isApiKeyUnset(config.apiKey)) {
+        logger.debug('Using the configured API key.', {});
+        return { scheme: 'apiKey', value: config.apiKey.trim() };
+      }
       const session = await readSession(config.cacheDir);
       if (session === null || session.redmineUrl !== config.redmineUrl) {
-        throw new InteractionRequiredError('Not signed in. Sign in first, then retry the call.', [], false, false, false, scopes);
+        throw new InteractionRequiredError(
+          `Not signed in. Sign in first, then retry the call. ${apiKeySetupGuidance()}`,
+          [],
+          false,
+          false,
+          false,
+          scopes,
+        );
       }
       if (session.kind === 'apikey') {
         if (!session.apiKey) throw new InteractionRequiredError('The stored API-key session is empty. Sign in again.');
@@ -405,32 +466,50 @@ export function createAuthProvider(deps: ProviderDeps): AuthProvider {
 
     async getAccount(): Promise<AccountInfo | null> {
       const identity = await readIdentity(config.cacheDir);
-      if (identity === null || identity.redmineUrl !== config.redmineUrl) return null;
-      return {
-        id: identity.id,
-        login: identity.login,
-        firstname: identity.firstname,
-        lastname: identity.lastname,
-        mail: identity.mail,
-        admin: identity.admin,
-      };
+      if (identity !== null && identity.redmineUrl === config.redmineUrl) {
+        return {
+          id: identity.id,
+          login: identity.login,
+          firstname: identity.firstname,
+          lastname: identity.lastname,
+          mail: identity.mail,
+          admin: identity.admin,
+        };
+      }
+      // A configured key carries no snapshot yet: resolve it live once and
+      // cache the identity (never the key) for status and attribution.
+      if (isApiKeyUnset(config.apiKey)) return null;
+      try {
+        const account = await fetchCurrentUser({ scheme: 'apiKey', value: config.apiKey.trim() });
+        await storeIdentity(account, 'users-current');
+        return account;
+      } catch {
+        return null;
+      }
     },
 
     async login(scopes: string[], flow?: AuthFlow): Promise<AccountInfo> {
+      // A configured key needs verifying, not replacing: confirm it live and
+      // cache the identity. The key itself is never written to disk.
+      if (!isApiKeyUnset(config.apiKey)) {
+        const account = await fetchCurrentUser({ scheme: 'apiKey', value: config.apiKey.trim() });
+        await storeIdentity(account, 'users-current');
+        logger.info('API key verified.', { login: account.login });
+        return account;
+      }
       const chosen = flow ?? config.authFlow;
       if (chosen === 'apikey') {
         throw new InteractionRequiredError(
-          'API-key sign-in needs the key itself: run `redmine-mcp login --api-key <KEY>`. ' +
-            'Find it on your Redmine account page (/my/account) once REST API access is enabled.',
+          `API-key sign-in needs the key itself. ${apiKeySetupGuidance()}`,
         );
       }
       if (chosen === 'browser') return loginByBrowser(scopes);
       try {
         return await loginByBrowser(scopes);
       } catch (error) {
-        if (error instanceof InteractionRequiredError && (error.loopbackTimeout || /browser/i.test(error.message))) {
+        if (error instanceof InteractionRequiredError && !error.serverRefused && (error.loopbackTimeout || /browser/i.test(error.message))) {
           throw new InteractionRequiredError(
-            `${error.message} Fallback: run \`redmine-mcp login --api-key <KEY>\`.`,
+            `${error.message} Fallback: ${apiKeySetupGuidance()}`,
             error.missingScopes,
             error.serverRefused,
             error.networkFailure,
@@ -463,6 +542,19 @@ export function createAuthProvider(deps: ProviderDeps): AuthProvider {
     },
 
     async sessionHealth(scopes: string[] = []): Promise<SessionHealth> {
+      // A configured key is unverified by definition (the user may have
+      // pasted it wrong), so it is probed live and fails fast with the fix.
+      if (!isApiKeyUnset(config.apiKey)) {
+        try {
+          await fetchCurrentUser({ scheme: 'apiKey', value: config.apiKey.trim() });
+          return { credentialUsable: true, note: 'configured API key verified live' };
+        } catch (error) {
+          return {
+            credentialUsable: false,
+            note: `configured API key refused: ${error instanceof Error ? error.message : String(error)}`.slice(0, 200),
+          };
+        }
+      }
       const session = await readSession(config.cacheDir);
       if (session === null || session.redmineUrl !== config.redmineUrl) {
         return { credentialUsable: false, note: 'no session is stored' };

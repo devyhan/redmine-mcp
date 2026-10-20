@@ -14,7 +14,9 @@ or sidestep entirely with `login --api-key`.
 
 ## `Blocked by a server configuration problem`
 
-- Pre-6.1 Redmine: no OAuth provider exists → `login --api-key`.
+- Pre-6.1 Redmine: no OAuth provider exists → set `REDMINE_MCP_API_KEY`
+  (or `--api-key`) and retry immediately, no login step; or `login --api-key`
+  once to store it.
 - REST API disabled: Administration → Settings → API → Enable.
 - Wrong `--client-id`/`--client-secret`, or the redirect URI registered in
   Redmine does not match `http://127.0.0.1:<port>/callback`.

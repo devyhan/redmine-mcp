@@ -8,7 +8,8 @@ import { InteractionRequiredError } from '../contracts.js';
 import type { ClientIdSource } from '../config.js';
 import { createAuthProvider } from './provider.js';
 import type { ProviderDeps } from './provider.js';
-import { clearCache as clearCacheDir } from './token-cache.js';
+import { clearCache as clearCacheDir, readSession } from './token-cache.js';
+import type { StoredSession } from './token-cache.js';
 
 export interface AuthFactoryDeps {
   config: ServerConfig;
@@ -38,6 +39,29 @@ export async function clearCache(cacheDir: string): Promise<void> {
 export function describeAccount(account: AccountInfo): string {
   const name = [account.firstname, account.lastname].filter(Boolean).join(' ');
   return name !== '' ? `${account.login} (${name})` : account.login;
+}
+
+/**
+ * Which credential the server would use right now. Origin only, never secret
+ * material: safe to print in `status` and `session_status`.
+ *
+ * - `env-key` — `--api-key` / `REDMINE_MCP_API_KEY`, used directly.
+ * - `stored-key` — `login --api-key` binding in the cache.
+ * - `oauth` — cached OAuth session.
+ * - `none` — nothing configured and nothing stored.
+ */
+export type CredentialSource = 'env-key' | 'stored-key' | 'oauth' | 'none';
+
+export async function credentialSource(config: ServerConfig): Promise<CredentialSource> {
+  if (config.apiKey.trim() !== '') return 'env-key';
+  let session: StoredSession | null;
+  try {
+    session = await readSession(config.cacheDir);
+  } catch {
+    return 'none';
+  }
+  if (session === null || session.redmineUrl !== config.redmineUrl) return 'none';
+  return session.kind === 'apikey' ? 'stored-key' : 'oauth';
 }
 
 /**

@@ -199,9 +199,10 @@ export function signInMessage(error: InteractionRequiredError): string {
     return [
       'Blocked by a server configuration problem — not by a missing sign-in.',
       'Redmine itself refused the OAuth flow. The usual causes: the server is older than 6.1 ' +
-        '(no OAuth provider — use `redmine-mcp login --api-key` instead), REST API disabled ' +
-        '(Administration → Settings → API), or the OAuth application registration is wrong. ' +
-        'Tell the user to check those on the server, then retry the call before signing in again.',
+        '(no OAuth provider — set REDMINE_MCP_API_KEY or pass --api-key and retry immediately, ' +
+        'no login step needed), REST API disabled (Administration → Settings → API), or the ' +
+        'OAuth application registration is wrong. Tell the user to check those on the server, ' +
+        'then retry the call before signing in again.',
       `Detail: ${error.message}`,
     ].join('\n');
   }

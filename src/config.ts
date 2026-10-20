@@ -59,10 +59,17 @@ export class ConfigError extends Error {
 /** Where the client ID came from, so sign-in can name the application. */
 export type ClientIdSource = { value: string; origin: 'flag' | 'env' | 'unset' };
 
+/**
+ * Where the API key came from. Reported (origin only, never the value) so
+ * status output can say which source supplies the credential.
+ */
+export type ApiKeySource = { value: string; origin: 'flag' | 'env' | 'unset' };
+
 export interface ParsedConfig {
   command: Command;
   config: ServerConfig;
   clientIdSource: ClientIdSource;
+  apiKeySource: ApiKeySource;
 }
 
 function env(name: string): string | undefined {
@@ -98,6 +105,27 @@ function resolveClientId(flag: string | undefined): ClientIdSource {
 /** True while no OAuth application is configured, so browser sign-in cannot run. */
 export function isClientIdUnset(clientId: string): boolean {
   return clientId.trim() === '';
+}
+
+function resolveApiKey(flag: string | undefined): ApiKeySource {
+  if (flag !== undefined && flag.trim() !== '') return { value: flag.trim(), origin: 'flag' };
+  const fromEnv = env('REDMINE_MCP_API_KEY');
+  if (fromEnv !== undefined) return { value: fromEnv.trim(), origin: 'env' };
+  return { value: '', origin: 'unset' };
+}
+
+/** True while no API key is configured via flag or environment. */
+export function isApiKeyUnset(apiKey: string): boolean {
+  return apiKey.trim() === '';
+}
+
+/** Where to find the key and how to hand it to the server (never its value). */
+export function apiKeySetupGuidance(): string {
+  return (
+    'Find the key on your Redmine account page (/my/account) once REST API access is enabled, ' +
+    'then set REDMINE_MCP_API_KEY or pass --api-key (tools work with zero login steps), ' +
+    'or run `redmine-mcp login --api-key <KEY>` once to store it encrypted.'
+  );
 }
 
 export function clientIdGuidance(): string {
@@ -140,7 +168,7 @@ function helpText(): string {
     '',
     'Commands:',
     '  serve                  Speak MCP over stdio (default when omitted)',
-    '  login [--scopes a,b]   Sign in in the browser (or --api-key KEY)',
+    '  login [--scopes a,b]   Sign in in the browser (or store --api-key KEY)',
     '  login --full           Sign in asking for every scope this config may need',
     '  logout                 Clear the cached session',
     '  status                 Show session, reachability, and consent checklist',
@@ -150,6 +178,7 @@ function helpText(): string {
     '  --redmine-url URL      Redmine base URL (required)',
     '  --client-id ID         OAuth2 application ID registered in Redmine',
     '  --client-secret S      OAuth2 application secret',
+    '  --api-key KEY          API key: direct credential, zero login steps',
     '  --groups a,b           Tool groups (default: personal preset)',
     `                         Known: ${GROUP_NAMES.join(', ')}`,
     '  --preset NAME          Group preset (default: personal)',
@@ -188,7 +217,13 @@ interface RawOptions {
   allowGenericWrite: boolean;
   loginScopes?: string[];
   loginFull: boolean;
-  loginApiKey?: string;
+  /**
+   * The `--api-key` flag: global (direct credential for every command) and,
+   * for `login`, the key to verify and store. Kept separate from the env
+   * fallback on purpose: `login` stores only an explicitly passed key, never
+   * one it found in the environment.
+   */
+  apiKeyFlag?: string;
 }
 
 function parsePort(raw: string, flag: string): number {
@@ -252,7 +287,12 @@ export function parseConfig(argv: string[]): ParsedConfig {
     const arg = argv[i]!;
     if (arg === '-h' || arg === '--help') return finishHelp(opts);
     if (arg === '-v' || arg === '--version') {
-      return { command: { kind: 'version' }, config: buildConfig(opts, true), clientIdSource: clientIdOf(opts) };
+      return {
+        command: { kind: 'version' },
+        config: buildConfig(opts, true),
+        clientIdSource: clientIdOf(opts),
+        apiKeySource: apiKeyOf(opts),
+      };
     }
     if (!arg.startsWith('-') && command === undefined) {
       command = arg;
@@ -315,7 +355,7 @@ export function parseConfig(argv: string[]): ParsedConfig {
         opts.loginFull = true;
         break;
       case '--api-key':
-        opts.loginApiKey = takeValue(argv, i++, arg);
+        opts.apiKeyFlag = takeValue(argv, i++, arg);
         break;
       default:
         throw new ConfigError(`Unknown option: ${arg}`);
@@ -339,22 +379,33 @@ export function parseConfig(argv: string[]): ParsedConfig {
 
   const config = buildConfig(opts);
   const clientIdSource = clientIdOf(opts);
+  const apiKeySource = apiKeyOf(opts);
   if (kind === 'login') {
     return {
-      command: { kind, scopes: opts.loginScopes, full: opts.loginFull || undefined, apiKey: opts.loginApiKey },
+      command: { kind, scopes: opts.loginScopes, full: opts.loginFull || undefined, apiKey: opts.apiKeyFlag },
       config,
       clientIdSource,
+      apiKeySource,
     };
   }
-  return { command: { kind } as Command, config, clientIdSource };
+  return { command: { kind } as Command, config, clientIdSource, apiKeySource };
 }
 
 function finishHelp(opts: RawOptions): ParsedConfig {
-  return { command: { kind: 'help', text: helpText() }, config: buildConfig(opts, true), clientIdSource: clientIdOf(opts) };
+  return {
+    command: { kind: 'help', text: helpText() },
+    config: buildConfig(opts, true),
+    clientIdSource: clientIdOf(opts),
+    apiKeySource: apiKeyOf(opts),
+  };
 }
 
 function clientIdOf(opts: RawOptions): ClientIdSource {
   return resolveClientId(opts.clientId);
+}
+
+function apiKeyOf(opts: RawOptions): ApiKeySource {
+  return resolveApiKey(opts.apiKeyFlag);
 }
 
 function buildConfig(opts: RawOptions, lenient = false): ServerConfig {
@@ -382,6 +433,7 @@ function buildConfig(opts: RawOptions, lenient = false): ServerConfig {
     redmineUrl,
     clientId: resolveClientId(opts.clientId).value,
     clientSecret: opts.clientSecret ?? '',
+    apiKey: resolveApiKey(opts.apiKeyFlag).value,
     groups,
     ...(droppedGroups === undefined ? {} : { droppedGroups }),
     readOnly: opts.readOnly,

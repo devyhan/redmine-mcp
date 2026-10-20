@@ -23,6 +23,7 @@ export function testConfig(overrides: Partial<ServerConfig> = {}): ServerConfig 
     maxOutputChars: 60_000,
     output: 'json',
     verbose: false,
+    apiKey: '',
     cacheDir: '/tmp/redmine-mcp-test-cache',
     authFlow: 'auto',
     authPort: 0,

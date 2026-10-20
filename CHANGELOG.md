@@ -3,6 +3,16 @@
 All notable changes to this project are documented here. Versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.0] — 2026-10-20
+
+- First-class API-key fallback: `--api-key` / `REDMINE_MCP_API_KEY` works as
+  a direct credential with zero login steps and wins over cached sessions.
+  The browser login probes for the OAuth provider first and fails fast with
+  the API-key fix on provider-less servers.
+- `status` and `session_status` report the credential source
+  (`env-key` / `stored-key` / `oauth` / `none`); the key value itself is never
+  written to disk, printed, or returned by a tool.
+
 ## [0.1.0] — 2026-10-20
 
 Initial release.

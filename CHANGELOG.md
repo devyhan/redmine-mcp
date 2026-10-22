@@ -3,6 +3,17 @@
 All notable changes to this project are documented here. Versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [0.4.0] — 2026-10-20
+
+- Structured results: `outputSchema` on issues/projects/access tools returns
+  validated `structuredContent`, plus clickable Redmine `resource_link` blocks.
+- Name resolution: issue assignee arguments accept display names and logins,
+  resolved to ids with precise ambiguous/unknown errors (no data leakage).
+- New `triage_issue` prompt with spec-supported argument completion for
+  project and assignee. Tool-argument completers ship wire-dormant (spec/SDK
+  route completion for prompt/resource refs only) and activate without code
+  changes if that ever lands.
+
 ## [0.3.0] — 2026-10-20
 
 - Permission-aware catalogue: per-tool `requiresAdmin` gating (`users_list`

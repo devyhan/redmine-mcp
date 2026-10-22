@@ -38,8 +38,55 @@ describe('issues tools', () => {
     assert.deepEqual(seen[0]!.body, { issue: { project_id: 1, subject: 'hi' } });
   });
 
+  it('resolves assignee names to ids before the call', async () => {
+    const config = testConfig({ groups: ['issues'] });
+    const { client, seen } = stubRedmine({
+      '/users.json': { data: { users: [{ id: 7, login: 'jdoe', firstname: 'Jane', lastname: 'Doe' }] } },
+      '/issues.json': { status: 201, data: { issue: { id: 9 } } },
+    });
+    const tools = issuesModule.build({ redmine: client, config, auth: stubAuth(), consentScopes: () => [] });
+    const create = tools.find((tool) => tool.name === 'issues_create')!;
+    await create.handler({ project_id: 1, subject: 'hi', assigned_to_id: 'jdoe' });
+    assert.deepEqual(seen[1]!.body, { issue: { project_id: 1, subject: 'hi', assigned_to_id: 7 } });
+  });
+
+  it('passes assignee ids and "me" through without resolving', async () => {
+    const config = testConfig({ groups: ['issues'] });
+    const { client, seen } = stubRedmine({
+      '/issues.json': { data: { issues: [], total_count: 0 }, totalCount: 0 },
+    });
+    const tools = issuesModule.build({ redmine: client, config, auth: stubAuth(), consentScopes: () => [] });
+    const list = tools.find((tool) => tool.name === 'issues_list')!;
+    await list.handler({ assigned_to_id: 'me' });
+    await list.handler({ assigned_to_id: 7 });
+    assert.deepEqual(
+      seen.map((req) => req.query?.['assigned_to_id']),
+      ['me', 7],
+    );
+  });
+
   it('belongs to the issues group catalogue', () => {
     assert.equal(issuesModule.group, GROUPS['issues']);
+  });
+
+  it('validates list and get results against their output schemas', async () => {
+    const config = testConfig({ groups: ['issues'] });
+    const { client } = stubRedmine({
+      '/issues.json': {
+        data: { issues: [{ id: 1, subject: 'Hi', custom_fields: [{ id: 2, value: 'x' }] }], total_count: 1 },
+        totalCount: 1,
+      },
+      '/issues/1.json': { data: { issue: { id: 1, subject: 'Hi', custom_fields: [{ id: 2, value: 'x' }] } } },
+    });
+    const tools = issuesModule.build({ redmine: client, config, auth: stubAuth(), consentScopes: () => [] });
+    const list = tools.find((tool) => tool.name === 'issues_list')!;
+    assert.ok(list.outputSchema !== undefined);
+    const listed = await list.handler({});
+    assert.deepEqual(list.outputSchema.parse(listed), listed);
+    const get = tools.find((tool) => tool.name === 'issues_get')!;
+    assert.ok(get.outputSchema !== undefined);
+    const one = await get.handler({ id: 1 });
+    assert.deepEqual(get.outputSchema.parse(one), one);
   });
 
   it('explains 403 on get as per-object visibility, not a malformed call', async () => {

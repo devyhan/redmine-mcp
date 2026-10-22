@@ -8,7 +8,16 @@ import { issuesModule } from './issues.js';
 import { projectsModule } from './projects.js';
 import { usersModule } from './users.js';
 
-function build(module: { build: (deps: never) => { name: string; handler: (args: never) => Promise<unknown> }[] }, paths: Record<string, { data: unknown; totalCount?: number }>) {
+function build(
+  module: {
+    build: (deps: never) => {
+      name: string;
+      outputSchema?: { parse: (value: unknown) => unknown };
+      handler: (args: never) => Promise<unknown>;
+    }[];
+  },
+  paths: Record<string, { data: unknown; totalCount?: number }>,
+) {
   const config = testConfig({ groups: ['issues'] });
   const { client, seen } = stubRedmine(paths);
   const tools = module.build({ redmine: client, config, auth: stubAuth(), consentScopes: () => [] } as never);
@@ -94,5 +103,36 @@ describe('extended coverage tools', () => {
       projects: [{ id: 10, name: 'demo', roles: ['Developer'] }],
     });
     assert.equal(seen[0]!.query?.['include'], 'memberships,groups');
+  });
+
+  it('validates list and access results against their output schemas', async () => {
+    const listed = build(projectsModule, {
+      '/projects.json': {
+        data: { projects: [{ id: 10, identifier: 'demo', name: 'Demo', custom_fields: [] }], total_count: 1 },
+        totalCount: 1,
+      },
+    });
+    const projectsList = listed.tools.find((tool) => tool.name === 'projects_list')!;
+    assert.ok(projectsList.outputSchema !== undefined);
+    const page = await projectsList.handler({} as never);
+    assert.deepEqual(projectsList.outputSchema.parse(page), page);
+
+    const access = build(usersModule, {
+      '/users/current.json': {
+        data: {
+          user: {
+            id: 7,
+            login: 'jdoe',
+            admin: true,
+            groups: [],
+            memberships: [{ id: 1, project: { id: 10, name: 'demo' }, roles: [{ id: 4, name: 'Developer' }] }],
+          },
+        },
+      },
+    });
+    const myAccess = access.tools.find((tool) => tool.name === 'users_my_access')!;
+    assert.ok(myAccess.outputSchema !== undefined);
+    const report = await myAccess.handler({} as never);
+    assert.deepEqual(myAccess.outputSchema.parse(report), report);
   });
 });

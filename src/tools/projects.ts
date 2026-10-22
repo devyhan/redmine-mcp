@@ -19,6 +19,11 @@ const listInput = z.object({
   include: z.array(z.string()).optional().describe('Associated data: trackers, issue_categories, enabled_modules, time_entry_activities.'),
 });
 
+const listOutput = z.object({
+  total_count: z.number().optional(),
+  projects: z.array(z.record(z.string(), z.unknown())),
+});
+
 const getInput = z.object({
   id: z.union([z.number().int(), z.string()]).describe('Project id or identifier.'),
   include: z.array(z.string()).optional().describe('Associated data (see projects_list).'),
@@ -84,6 +89,7 @@ export const projectsModule: ToolModule = {
         title: 'List projects',
         description: 'Lists visible projects. Returns the page plus total_count.',
         inputSchema: listInput,
+        outputSchema: listOutput,
         scopes: READ_SCOPES,
         group: GROUP.name,
         handler: async (args) => {

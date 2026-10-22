@@ -18,11 +18,13 @@ import { RedmineError, InteractionRequiredError } from './contracts.js';
 import { isNetworkFailure, networkFailureMessage } from './auth/provider.js';
 import { formatIdentityLine, readIdentity } from './auth/token-cache.js';
 import { packageVersion } from './config.js';
+import { TRIAGE_PROMPT, createTriagePromptArgs, triagePrompt } from './prompts.js';
 import { GROUP_NAMES } from './tools/groups.js';
 import { buildDiscoveryTools } from './tools/discovery.js';
 import { genericModule } from './tools/generic.js';
 import { DOMAIN_MODULES } from './tools/modules.js';
 import { logger } from './util/logger.js';
+import { resourceLinksFor, type ResourceLinkBlock } from './util/links.js';
 import { serializeResult } from './util/truncate.js';
 
 /** The server name reported in `initialize`. Clients key their config off it. */
@@ -249,7 +251,7 @@ interface FactoryDeps {
  * description of the session, and callers already have it to hand.
  */
 export function createServerFactory(deps: FactoryDeps): () => McpServer {
-  const { config, tools } = deps;
+  const { config, tools, redmine } = deps;
 
   const exposed = exposedTools(tools, config);
 
@@ -265,6 +267,18 @@ export function createServerFactory(deps: FactoryDeps): () => McpServer {
       () => agentStartPrompt(),
     );
 
+    // Built inside the factory, not beside it: the args schema carries a
+    // completer set bound to this connection's client and cache.
+    server.registerPrompt(
+      TRIAGE_PROMPT.name,
+      {
+        title: TRIAGE_PROMPT.title,
+        description: TRIAGE_PROMPT.description,
+        argsSchema: createTriagePromptArgs(redmine),
+      },
+      (args) => triagePrompt(args),
+    );
+
     for (const def of exposed) {
       const write = def.write === true;
       server.registerTool(
@@ -273,6 +287,7 @@ export function createServerFactory(deps: FactoryDeps): () => McpServer {
           title: def.title,
           description: def.description,
           inputSchema: def.inputSchema,
+          ...(def.outputSchema !== undefined ? { outputSchema: def.outputSchema } : {}),
           annotations: {
             readOnlyHint: !write,
             destructiveHint: write && (DESTRUCTIVE.test(def.name) || ALWAYS_DESTRUCTIVE.has(def.name)),
@@ -282,9 +297,15 @@ export function createServerFactory(deps: FactoryDeps): () => McpServer {
         async (args: unknown) => {
           try {
             const value = await def.handler((args ?? {}) as Record<string, unknown>);
-            const { text } = serializeResult(value, config.maxOutputChars, config.output);
-            const attributed = await maybePrependIdentity(def, config.cacheDir, text);
-            return { content: [{ type: 'text' as const, text: attributed }] };
+            // Fresh literal: the SDK callback type carries an index signature
+            // a named interface cannot satisfy.
+            const formatted = await formatToolResult(def, value, config);
+            return {
+              content: formatted.content,
+              ...(formatted.structuredContent !== undefined
+                ? { structuredContent: formatted.structuredContent }
+                : {}),
+            };
           } catch (error) {
             return {
               content: [{ type: 'text' as const, text: toolErrorText(def.name, error) }],
@@ -303,6 +324,33 @@ export function createServerFactory(deps: FactoryDeps): () => McpServer {
 
     return server;
   };
+}
+
+/** One text block plus zero or more `resource_link` blocks. */
+export interface FormattedToolResult {
+  content: [{ type: 'text'; text: string }, ...ResourceLinkBlock[]];
+  structuredContent?: unknown;
+}
+
+/**
+ * Formats a handler return value for the wire: serialized (and possibly
+ * identity-attributed) text first, `resource_link` blocks appended, and the
+ * raw value as `structuredContent` when the tool declares an `outputSchema`
+ * (the SDK validates it and advertises the schema on `tools/list`).
+ * Extracted so tests can assert the shape without MCP plumbing.
+ */
+export async function formatToolResult(
+  def: ToolDefinition,
+  value: unknown,
+  config: ServerConfig,
+): Promise<FormattedToolResult> {
+  const { text } = serializeResult(value, config.maxOutputChars, config.output);
+  const attributed = await maybePrependIdentity(def, config.cacheDir, text);
+  const content: FormattedToolResult['content'] = [
+    { type: 'text', text: attributed },
+    ...resourceLinksFor(def.name, value, config),
+  ];
+  return def.outputSchema === undefined ? { content } : { content, structuredContent: value };
 }
 
 /**

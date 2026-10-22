@@ -263,6 +263,15 @@ export interface ToolDefinition {
   description: string;
   /** Must be a `z.object({...})`. */
   inputSchema: z.ZodType;
+  /**
+   * Optional output schema, advertised as the MCP `outputSchema` and used to
+   * validate the `structuredContent` the registration layer returns alongside
+   * the text. Must be a `z.object({...})` (or another object-rooted schema)
+   * that the handler's return value always satisfies; keep it loose
+   * (`z.record`, optional fields) so Redmine-side shape drift fails open in
+   * the text rather than failing the whole call.
+   */
+  outputSchema?: z.ZodType;
   /** True when the tool mutates data. Suppressed under `--read-only`. */
   write?: boolean;
   /**

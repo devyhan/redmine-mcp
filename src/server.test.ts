@@ -1,7 +1,8 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { z } from 'zod';
 
-import { InteractionRequiredError } from './contracts.js';
+import { InteractionRequiredError, type ToolDefinition } from './contracts.js';
 import { scopeReadingOnlyAuth } from './auth/index.js';
 import { stubAuth, stubRedmine, testConfig } from './test-support.js';
 import {
@@ -9,7 +10,9 @@ import {
   SERVER_INSTRUCTIONS,
   SERVER_NAME,
   collectTools,
+  createServerFactory,
   exposedToolNames,
+  formatToolResult,
   signInMessage,
 } from './server.js';
 
@@ -82,5 +85,63 @@ describe('server assembly', () => {
     const auth = scopeReadingOnlyAuth();
     await assert.rejects(auth.getCredential([]), InteractionRequiredError);
     assert.equal(await auth.getAccount(), null);
+  });
+});
+
+describe('structured results', () => {
+  it('returns structuredContent only when the tool declares an outputSchema', async () => {
+    const config = testConfig({ groups: ['issues'] });
+    const base: ToolDefinition = {
+      name: 'issues_list',
+      title: 't',
+      description: 'd',
+      inputSchema: z.object({}),
+      scopes: [],
+      group: 'issues',
+      handler: async () => ({}),
+    };
+    const value = { total_count: 1, issues: [{ id: 1, subject: 'Hi' }] };
+    const withSchema = await formatToolResult({ ...base, outputSchema: z.object({}) }, value, config);
+    assert.deepEqual(withSchema.structuredContent, value);
+    const without = await formatToolResult({ ...base }, value, config);
+    assert.equal('structuredContent' in without, false);
+  });
+
+  it('appends resource links while keeping the text intact', async () => {
+    const config = testConfig({ groups: ['issues'] });
+    const def: ToolDefinition = {
+      name: 'issues_list',
+      title: 't',
+      description: 'd',
+      inputSchema: z.object({}),
+      scopes: [],
+      group: 'issues',
+      handler: async () => ({}),
+    };
+    const value = { total_count: 1, issues: [{ id: 1, subject: 'Hi' }] };
+    const result = await formatToolResult({ ...def }, value, config);
+    assert.equal(result.content[0]!.type, 'text');
+    assert.match(result.content[0]!.text, /"total_count": 1/);
+    assert.equal(result.content.length, 2);
+    assert.deepEqual(result.content[1], {
+      type: 'resource_link',
+      uri: 'https://redmine.example.com/issues/1',
+      name: '#1 Hi',
+      mimeType: 'text/html',
+    });
+  });
+
+  it('registers outputSchema through to the SDK tool', () => {
+    const config = testConfig({ groups: ['issues', 'projects', 'users'] });
+    const { client } = stubRedmine({});
+    const auth = stubAuth();
+    const tools = collectTools({ redmine: client, config, auth, consentScopes: () => [] });
+    const server = createServerFactory({ config, redmine: client, auth, tools })();
+    const registered = (server as unknown as { _registeredTools: Record<string, { outputSchema?: unknown }> })
+      ._registeredTools;
+    for (const name of ['issues_list', 'issues_get', 'projects_list', 'users_my_access']) {
+      assert.notEqual(registered[name]!.outputSchema, undefined, name);
+    }
+    assert.equal(registered['issues_delete']!.outputSchema, undefined);
   });
 });

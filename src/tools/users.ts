@@ -29,6 +29,13 @@ const updateInput = z.object({
   mail: z.string().optional(),
 });
 
+const myAccessOutput = z.object({
+  login: z.string(),
+  admin: z.boolean(),
+  groups: z.array(z.object({ id: z.number(), name: z.string() })),
+  projects: z.array(z.object({ id: z.number(), name: z.string(), roles: z.array(z.string()) })),
+});
+
 export const usersModule: ToolModule = {
   group: GROUP,
   build({ redmine }: ToolDeps): ToolDefinition[] {
@@ -116,6 +123,7 @@ export const usersModule: ToolModule = {
           'users outside your projects — a 403 almost always means the object lives where ' +
           'this list does not reach, not that the call was malformed.',
         inputSchema: z.object({}),
+        outputSchema: myAccessOutput,
         scopes: READ_SCOPES,
         group: GROUP.name,
         handler: async () => {

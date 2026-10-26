@@ -2,7 +2,8 @@
 
 ## Setup
 
-Node >= 20 and npm. `npm install`, then `npm test` (builds first via
+Node 22.23.4+ (or 24.22.1+ / 26.12.1+) and npm — see `.node-version`.
+`npm install`, then `npm test` (builds first via
 `pretest`, runs the offline `node:test` suite through `scripts/run-tests.mjs`).
 
 ## Conventions

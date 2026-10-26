@@ -3,6 +3,16 @@
 All notable changes to this project are documented here. Versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [0.5.0] — 2026-10-26
+
+- Node.js support floor raised to the October 2026 security release:
+  22.23.4+, 24.22.1+, or 26.12.1+ (`engines: >=22.23.4`). Node 20.x and
+  below are end-of-life, receive no security patches, and are no longer
+  supported. If you run Node 20, upgrade Node before updating this package.
+- CI now tests the supported floors (22.23.4, 24.22.1) across
+  ubuntu/macos/windows; release and contract workflows pin patched versions.
+- No code changes: same tools and behavior as 0.4.0.
+
 ## [0.4.0] — 2026-10-20
 
 - Structured results: `outputSchema` on issues/projects/access tools returns

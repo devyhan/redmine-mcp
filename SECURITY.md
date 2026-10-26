@@ -27,6 +27,19 @@ prompt bodies by construction:
   verifier, and validates the `state` on return.
 - Host pinning also applies to `redmine_request`: absolute URLs are refused.
 
+## Runtime
+
+Supported Node.js versions track the October 2026 security release floor:
+
+- 22.x: >= 22.23.4
+- 24.x: >= 24.22.1
+- 26.x: >= 26.12.1
+
+Node 20.x and below are end-of-life and receive no security patches —
+running this package on them is unsupported. `package.json` `engines`
+enforces `>=22.23.4`; the per-major floors above cover the 24.x/26.x
+range that a single semver range cannot express.
+
 ## Reporting
 
 Open a private security advisory on GitHub. Do not file public issues for

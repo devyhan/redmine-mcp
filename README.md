@@ -27,7 +27,8 @@ Straight from GitHub (tracks the default branch instead of a release):
 npx -y github:devyhan/redmine-mcp --redmine-url https://redmine.example.com
 ```
 
-Node >= 20 required.
+Node 22.23.4+, 24.22.1+, or 26.12.1+ required (October 2026 security
+floor; Node 20 and below are EOL and unpatched).
 
 ## Quick start
 
